@@ -11,6 +11,7 @@
 ##########################################################################
 
 library(reshape2)
+library(data.table)
 
 ##########################################################################
 # Constants
@@ -37,13 +38,31 @@ HISTORICAL_AIR_DATA_FORMAT <- c(
 # Functions
 ##########################################################################
 
+load_historical_air_data <- function(station.ids = NA) {
+  files <- list.files(HISTORICAL_AIR_DATA_RES_DIR)
+  
+  read.year <- function(file) {
+    f <- fread(paste0(HISTORICAL_AIR_DATA_RES_DIR, file))
+    if (!is.na(station.ids)) {
+      f <- f[station %in% station.ids]
+    }
+    f
+  }
+  
+  data <- rbindlist(lapply(files, read.year))
+}
+
+load_contamination_variables <- function() {
+  data <- fread("dat/contamination_variables.tsv")
+}
+
 download_historical_air_data <- function() {
   mapping <- read.csv(HISTORICAL_AIR_DATA_MAPPING, sep="\t")
   years <- mapping$year
   
   for(year in years) {
     print(paste("Downloading and cleaning data from", year))
-    download_yearly_air_data(year)
+    download_hourly_air_data(year)
   }
 }
 
@@ -63,7 +82,7 @@ download_hourly_air_data <- function(year) {
   url <- gsub("__ID__", download.id, HISTORICAL_AIR_DATA_URL)
   zip.filename <- paste0(HISTORICAL_AIR_DATA_ZIP_DIR, year, ".zip")
   raw.dirname  <- paste0(HISTORICAL_AIR_DATA_RAW_DIR, year, "/")
-  res.filename <- paste0(HISTORICAL_AIR_DATA_RES_DIR, year, ".txt")
+  res.filename <- paste0(HISTORICAL_AIR_DATA_RES_DIR, year, ".tsv")
   download.file(url, zip.filename, quiet = TRUE)
   
   # Unzip it and read all the files in it
