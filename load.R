@@ -3,7 +3,10 @@
 # Gets contamination data
 ##########################################################################
 
+library(data.table)
+
 source("R/air-data.R")
+source("R/meteo-data.R")
 
 download_historical_air_data()
-
+download_meteo_data()
