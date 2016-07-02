@@ -20,3 +20,6 @@ vignettes/*.pdf
 
 # Large data files
 dat/air_hist/
+
+# Results
+res/
