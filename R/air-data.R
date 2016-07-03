@@ -46,6 +46,8 @@ load_historical_air_data <- function(station.ids = NA) {
     if (!is.na(station.ids)) {
       f <- f[station %in% station.ids]
     }
+    
+    f[, date := as.Date(paste0(2000 + year, '-', month, '-', day), '%Y-%m-%d')]
     f
   }
   
