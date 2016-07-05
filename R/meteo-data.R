@@ -40,11 +40,24 @@ download_meteo_data <- function() {
                   "&hora=",  "00",
                   "&ind=",   "08221") # Madrid - Barajas
     
-    # Download, parse data and transform it
+    # Download and parse data
     html.tables <- readHTMLTable(url, stringsAsFactors = FALSE, skip.rows = 1:2)
-    data <- html.tables[[3]][,c(1,4,8,10)]
+    meteo.table <- html.tables[[3]]
+    
+    # Rarely the html table has an extra column
+    table.ncol <- ncol(meteo.table)
+    if (table.ncol == 23) {
+      col.ind <- c(1,4,8,11)
+    } else if (table.ncol == 22) {
+      col.ind <- c(1,4,8,10)
+    } else {
+      stop(paste("Unrecognized table format in ", url))
+    }
+    
+    data <- meteo.table[, col.ind]
     colnames(data) <- c("date", "mean_temp", "wind_speed", "rain")
     
+    # Transform it
     data$date <- as.Date(paste0(data$date, "/", year(current)), "%d/%m/%Y")
     data$mean_temp  <- as.numeric(data$mean_temp)
     data$wind_speed <- as.numeric(data$wind_speed)
