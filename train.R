@@ -7,6 +7,7 @@ library(data.table)
 library(lubridate)
 library(randomForest)
 library(xgboost)
+library(ggplot2)
 
 source("R/air-data.R")
 source("R/meteo-data.R")
@@ -14,7 +15,7 @@ source("R/traffic-data.R")
 
 # pza españa: 28079004
 # Merge air, variable, meteo and traffic data
-air.data <- load_historical_air_data()
+air.data <- load_historical_air_data("28079004")
 var.data <- load_contamination_variables()
 meteo.data <- load_meteo_data()
 traffic.data <- load_traffic_data()
@@ -33,10 +34,10 @@ setkey(air.data, var_formula, station, date, hour)
 air.data[, wday := wday(date)]
 
 # Feature selection
+air.data <- air.data[valid == TRUE & var_formula == "NO2" & station == "28079004"]
 air.data[, formula_station := paste(var_formula, station, sep = "_")]
-air.data <- air.data[valid == TRUE,
-                     c("formula_station", "year", "month", "hour", "wday", "mean_temp", "wind_speed",
-                       "rain", "value", "m30_density"),
+air.data <- air.data[, c("formula_station", "year", "month", "hour", "wday", "mean_temp", "wind_speed",
+                       "rain", "rel_humidity_pct", "value", "m30_density"),
                      with = FALSE]
 
 # Train a model for every station and variable
@@ -56,18 +57,24 @@ for (form_station in unique(air.data$formula_station)) {
   train.data <- train[, -c("value"), with = FALSE]
   test.label <- test$value
   test.data <- test[, -c("value"), with = FALSE]
-  xgb <- xgboost(data = data.matrix(train.data), label = train.label, max.depth = 10, nthread = 4,
-                 nrounds = 100, objetive = "reg:linear")
+  xgb <- xgboost(data = data.matrix(train.data), label = train.label, max.depth = 11,
+                 nrounds = 400, objetive = "reg:linear", eval_metric = "rmse")
   pred.xgb <- predict(xgb, data.matrix(test.data))
   
   # Plot real vs predicted values
   png(filename = paste0("res/prediction_", form_station, ".png"))
   plot(test$value, pred.xgb, pch = ".")
+  abline(0, 1, col = "red")
   dev.off()
   
   # Print the errors
   print(paste0("MAE: ",  mean(abs(pred.xgb - test.label))))
   print(paste0("RMSE: ", sqrt(mean(abs(pred.xgb - test.label)^2))))
+  
+  # Error
+  res <- data.frame(err = pred.xgb - test.label, real = test.label)
+  ggplot(res, aes(real, err)) +
+    geom_point(size = .2)
   
   # Plot the feature importance
   model <- xgb.dump(xgb, with.stats=TRUE)
@@ -81,6 +88,9 @@ for (form_station in unique(air.data$formula_station)) {
   
   # Save the model
   xgb.save(xgb, paste0("res/model_", form_station, ".model"))
+  
+  # Feature influence
+  ggplot()
 }
 
 
