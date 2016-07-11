@@ -10,7 +10,11 @@ source("R/meteo-data.R")
 source("R/traffic-data.R")
 source("R/calendar-data.R")
 
+# Historical data
 download_historical_air_data()
 download_meteo_data()
 download_traffic_data()
 build_calendar_data()
+
+# Incremental data
+download_current_day_air_data()

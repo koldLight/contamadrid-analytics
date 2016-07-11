@@ -18,6 +18,8 @@ library(data.table)
 ##########################################################################
 
 HISTORICAL_AIR_DATA_URL <- "http://datos.madrid.es/egob/catalogo/201200-__ID__-calidad-aire-horario.zip"
+CURRENT_DAY_AIR_DATA_URL <- "http://www.mambiente.munimadrid.es/opendata/horario.txt"
+CURRENT_AIR_DATA_DIR <- "dat/air_current/"
 HISTORICAL_AIR_DATA_MAPPING <- "dat/historical_year_download_id.tsv"
 HISTORICAL_AIR_DATA_DIR <- "dat/air_hist/"
 HISTORICAL_AIR_DATA_ZIP_DIR <- paste0(HISTORICAL_AIR_DATA_DIR, "zip/")
@@ -47,7 +49,7 @@ load_historical_air_data <- function(station.ids = NA) {
       f <- f[station %in% station.ids]
     }
     
-    f[, date := as.Date(paste0(2000 + year, '-', month, '-', day), '%Y-%m-%d')]
+    f[, date := as.Date(date)]
     f
   }
   
@@ -55,7 +57,58 @@ load_historical_air_data <- function(station.ids = NA) {
 }
 
 load_contamination_variables <- function() {
-  data <- fread("dat/contamination_variables.tsv")
+  fread("dat/contamination_variables.tsv")
+}
+
+load_stations <- function() {
+  fread("dat/stations.tsv")
+}
+
+download_current_day_air_data <- function() {
+  raw <- fread(CURRENT_DAY_AIR_DATA_URL)
+  
+  # Station
+  raw[, station := paste0(num_to_str(V1, 2),
+                          num_to_str(V2, 2),
+                          num_to_str(V3, 2),
+                          num_to_str(V4, 2))]
+  
+  # Variable, technique and periodicity
+  raw[, variable   := V5]
+  raw[, technique  := V6]
+  raw[, periodicity := 2]  # hourly
+  
+  # Date
+  raw[, date  := as.Date(paste0(V7, "-", V8, "-", V9))]
+  
+  # Hourly values
+  for (i in 0:23) {
+    first.col.ind  <- 10
+    value.colname  <- paste0("V", 2 * i + first.col.ind)
+    valid.colname  <- paste0("V", 2 * i + first.col.ind + 1)
+    result.colname <- paste0("value", i)
+    raw[, eval(result.colname) := paste0(get(value.colname), get(valid.colname))]
+  }
+  
+  # Remove columns
+  raw[, 1:57 := NULL]
+  
+  # Melt data in order to have one row per hour
+  data.melted <- melt(raw, id.vars = c("station", "variable", "technique", "periodicity", "date"),
+                      variable.name = "hour")
+  data.melted[, hour := as.numeric(gsub("value([0-9]+)$", "\\1", hour))]
+  
+  # Split the value in the measured value and if it's valid
+  data.melted[, valid := substr(value, nchar(value), nchar(value)) == "V"]
+  data.melted[, value := as.numeric(substr(value, 1, nchar(value) - 1))]
+  
+  # If the value isn't numeric, mark the record as invalid.
+  # This was observed only once, in 2013-08 record 32173
+  data.melted[is.na(value), valid := FALSE]
+  
+  # Save this day data
+  res.filename <- paste0(CURRENT_AIR_DATA_DIR, min(data.melted$date), ".tsv")
+  write.table(data.melted, res.filename, sep = "\t", row.names = FALSE)
 }
 
 download_historical_air_data <- function() {
@@ -102,11 +155,18 @@ clean_historical_air_data <- function(input.file) {
   data <- read.fwf(input.file, widths, stringsAsFactors = FALSE)
   colnames(data) <- names(widths)
   
+  # Transform the date
+  data$date <- as.Date(paste0(2000 + data$year, "-", data$month, "-", data$day))
+  data$year  <- NULL
+  data$month <- NULL
+  data$day   <- NULL
+  
   # Melt data in order to have one row per hour
-  data.melted <- melt(data, id.vars = 1:7, variable.name = "hour")
+  data.melted <- melt(data, id.vars = c("station", "variable", "technique", "periodicity", "date"),
+                      variable.name = "hour")
   data.melted$hour <- as.numeric(gsub("value([0-9]+)$",
                                       "\\1",
-                                      as.character(data.melted[, 8]))) - 1
+                                      as.character(data.melted[, 6]))) - 1
   
   # Split the value in the measured value and if it's valid
   data.melted$valid <- substr(data.melted$value, 6, 6) == "V"
@@ -119,11 +179,16 @@ clean_historical_air_data <- function(input.file) {
   return(data.melted)
 }
 
+num_to_str <- function(num, width) {
+  formatC(num, width = 2, format = "d", flag = "0")
+}
+
 create_file_structure <- function() {
   create_directory(HISTORICAL_AIR_DATA_DIR)
   create_directory(HISTORICAL_AIR_DATA_ZIP_DIR)
   create_directory(HISTORICAL_AIR_DATA_RAW_DIR)
   create_directory(HISTORICAL_AIR_DATA_RES_DIR)
+  create_directory(CURRENT_AIR_DATA_DIR)
 }
 
 create_directory <- function(directory) {
