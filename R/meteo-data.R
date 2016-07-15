@@ -10,8 +10,15 @@
 library(XML)
 library(lubridate)
 library(data.table)
+library(zoo)
 
 source("R/util.R")
+
+##########################################################################
+# Constants
+##########################################################################
+
+METEO.DATE.FROM <- "2001-01-01"
 
 ##########################################################################
 # Functions
@@ -24,13 +31,23 @@ load_meteo_data <- function() {
 }
 
 download_meteo_data <- function() {
-  from <- as.Date("2001-01-01")
+  hourly <- download_hourly_meteo_data()
+  daily  <- download_daily_meteo_data()
+  
+  meteo.data <- merge(daily, hourly, by = "date")
+  setkey(meteo.data, date, hour)
+  
+  write.table(meteo.data, file = "dat/meteo_hist.tsv", row.names = FALSE, sep = "\t")
+}
+
+download_daily_meteo_data <- function() {
+  from <- as.Date(METEO.DATE.FROM)
   to <- Sys.Date()
   current <- from
   it <- 0
   
   repeat {
-    print(paste("Downloading meteo data for month", current))
+    print(paste("Downloading daily meteo data for month", current))
     days <- days_in_month(current)
     url <- paste0("http://www.ogimet.com/cgi-bin/gsynres?ord=REV",
                   "&ndays=", days, 
@@ -93,6 +110,74 @@ download_meteo_data <- function() {
   meteo.data <- fix_NAs_closest_value(meteo.data, "wind_speed")
   meteo.data <- fix_NAs_closest_value(meteo.data, "rain")
   
-  # Write the results to file
-  write.table(meteo.data, "dat/meteo_hist.tsv", sep = "\t", row.names = FALSE)
+  meteo.data
+}
+
+
+download_hourly_meteo_data <- function() {
+  from <- as.Date(METEO.DATE.FROM)
+  to <- Sys.Date()
+  current <- from
+  it <- 0
+  
+  repeat {
+    print(paste("Downloading hourly meteo data for month", current))
+    days <- days_in_month(current)
+    url <- paste0("http://www.ogimet.com/cgi-bin/gsynres?ord=REV",
+                  "&decoded=yes",     # hourly
+                  "&ndays=", days, 
+                  "&ano=",   year(current),
+                  "&mes=",   month(current),
+                  "&day=",   days,
+                  "&hora=",  "24",
+                  "&ind=",   "08221") # Madrid - Barajas
+    
+    # Download and parse data
+    html.tables <- readHTMLTable(url, stringsAsFactors = FALSE, skip.rows = 1:2)
+    meteo.table <- html.tables[[3]]
+    
+    # Rarely the html table has an extra column
+    table.ncol <- ncol(meteo.table)
+    
+    data <- meteo.table[, c(1,2,3)]
+    colnames(data) <- c("date", "hour", "temp")
+    
+    # Transform it
+    data$date <- as.Date(paste0(data$date, "/", year(current)), "%d/%m/%Y")
+    data$hour <- as.numeric(gsub("([0-9]+):[0-9]+", "\\1", data$hour))
+    
+    # Append the data
+    if (it == 0) {
+      meteo.data <- data
+    } else {
+      meteo.data <- rbind(meteo.data, data)
+    }
+    it <- it + 1
+    
+    # Next iteration
+    month(current) <- month(current) + 1
+    
+    if (current > to) {
+      break
+    }
+  }
+  
+  # Transform to data.table
+  meteo.data <- as.data.table(meteo.data)
+  setkey(meteo.data, date, hour)
+  meteo.data <- unique(meteo.data)
+  
+  # Until 2007, there are values every 3 hours. From then, every hour
+  # Fix the missing data by interpolation
+  all.dates <- data.table(date = seq(min(meteo.data$date), max(meteo.data$date), by = 1))
+  all.hours <- data.table(hour = 0:23)
+  all <- all.dates[, as.list(all.hours), by = date]
+  setkey(all, date, hour)
+  
+  full.data <- merge(meteo.data, all, by = c("date", "hour"), all.y = TRUE)
+  full.data <- full.data[!(date == to & is.na(temp))]
+  setkey(full.data, date, hour)
+  full.data$temp <- na.approx(full.data$temp)
+  
+  full.data
 }
