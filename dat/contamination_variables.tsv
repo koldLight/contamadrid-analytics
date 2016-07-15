@@ -15,3 +15,11 @@ var_id	var_name	var_formula	var_units
 39	Ortoxileno	OXY	µg/m3
 42	Hidrocarburos totales (hexano)	TCH	mg/m3
 44	Hidrocarburos no metánicos (hexano)	NMHC	mg/m3
+80	UV	UV	desconocida
+81	VV	Velocidad viento	km/h
+82	DV	Dirección viento	grados
+83	Temperatura temperatura	celsius
+86	HR	Humedad relativa	porcentaje
+87	PRB	Presión barométrica	mb
+88	RS	Radiación solar	Wh/m2
+89	LL	LL	desconocida

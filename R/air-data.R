@@ -69,14 +69,13 @@ download_current_day_air_data <- function() {
   
   # Station
   raw[, station := paste0(num_to_str(V1, 2),
-                          num_to_str(V2, 2),
-                          num_to_str(V3, 2),
-                          num_to_str(V4, 2))]
+                          num_to_str(V2, 3),
+                          num_to_str(V3, 3))]
   
   # Variable, technique and periodicity
-  raw[, variable   := V5]
-  raw[, technique  := V6]
-  raw[, periodicity := 2]  # hourly
+  raw[, variable    := V4]
+  raw[, technique   := V5]
+  raw[, periodicity := V6]  # hourly
   
   # Date
   raw[, date  := as.Date(paste0(V7, "-", V8, "-", V9))]
@@ -180,7 +179,7 @@ clean_historical_air_data <- function(input.file) {
 }
 
 num_to_str <- function(num, width) {
-  formatC(num, width = 2, format = "d", flag = "0")
+  formatC(num, width = width, format = "d", flag = "0")
 }
 
 create_file_structure <- function() {
