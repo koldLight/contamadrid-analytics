@@ -24,7 +24,7 @@ meteo.data <- load_meteo_data()
 traffic.data <- load_traffic_data()
 calendar.data <- load_calendar_data()
 air.data <- merge(air.data, var.data, by.x = "variable", by.y = "var_id")
-air.data <- merge(air.data, meteo.data, by = "date")
+air.data <- merge(air.data, meteo.data, by = c("date","hour"))
 air.data <- merge(air.data, traffic.data, by = "date")
 air.data <- merge(air.data, calendar.data, by = "date")
 
@@ -40,9 +40,10 @@ air.data[, wday := wday(date)]
 
 # Feature selection
 prep.data <- air.data[valid == TRUE & var_formula == "NO2"]
+prep.data <- prep.data[, temp_range := max_temp - min_temp]
 prep.data[, formula_station := paste(var_formula, station, sep = "_")]
-prep.data <- prep.data[, c("date", "formula_station", "hour", "max_temp", "min_temp", "mean_temp", "wind_speed",
-                           "rel_humidity_pct", "value", "is_holiday"),
+prep.data <- prep.data[, c("date", "formula_station", "hour", "temp_range", "mean_temp", "temp", "wind_speed",
+                           "rel_humidity_pct", "value", "wday", "m30_density"),
                        with = FALSE]
 
 # Train a model for every station and variable
@@ -75,7 +76,7 @@ for (form_station in unique(prep.data$formula_station)) {
   train.data <- train[, -c("value"), with = FALSE]
   test.label <- test$value
   test.data <- test[, -c("value"), with = FALSE]
-  xgb <- xgboost(data = data.matrix(train.data), label = train.label, max.depth = 4, nthreads = 8,
+  xgb <- xgboost(data = model.matrix(~ ., data = train.data), label = train.label, max.depth = 8, nthreads = 8,
                  nrounds = 20, objetive = "reg:linear", eval_metric = "rmse", subsample = .075)
   
   train.glm <- copy(train.data)
@@ -150,4 +151,66 @@ for (form_station in unique(prep.data$formula_station)) {
   
 }
 
- 
+library(bsts)
+# bsts
+train.data <- data[date < as.Date("2015-07-01") ]
+train.data[, week.code := NULL]
+train.data[, wday := as.factor(wday)]
+train.data[, value_log := log(value)]
+train.data[, temp_range_inv := 0 ]
+train.data[month(date) == 11, temp_range_inv := temp_range ]
+ss <- AddSeasonal(list(), y = train.data$value, nseasons = 24)
+#ss <- AddSeasonal(list(), y = train.data$value, nseasons = 24*7)
+bsts.model <- bsts(value_log ~ mean_temp + temp_range_inv + temp_range + wind_speed + rel_humidity_pct  + m30_density,
+                   data = train.data, state.specification = ss, niter = 1000)
+burn <- SuggestBurn(0.1, bsts.model)
+
+### Extract the components
+dates <- train.data$date
+hour(dates) <- train.data$hour
+train.data$date <- as.POSIXct(dates)
+components <- cbind.data.frame(                            
+  colMeans(bsts.model$state.contributions[-(1:burn),"seasonal.24.1",]),
+  train.data$date)  
+names(components) <- c("Seasonality", "Date")
+components <- melt(components, id="Date")
+names(components) <- c("Date", "Component", "Value")
+
+### Plot
+ggplot(data=components, aes(x=Date, y=Value)) + geom_line() + 
+  theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") + 
+  facet_grid(Component ~ ., scales="free") + guides(colour=FALSE) + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
+
+plot(bsts.model, "coefficients")
+plot(bsts.model, "residuals")
+plot(bsts.model, "prediction.errors")
+plot(bsts.model, "seasonal")
+
+test.data <- data[date >= as.Date("2015-07-01") ]
+test.data[, wday := as.factor(wday)]
+test.data[, temp_range_inv := 0 ]
+test.data[, value_log := log(value)]
+test.data[month(date) == 11, temp_range_inv := temp_range ]
+pred.bsts <- predict(bsts.model, test.data, burn = burn)
+
+res <- copy(test.data)
+dates <- res$date
+hour(dates) <- res$hour
+res$date <- as.POSIXct(dates)
+res[, pred_mean := pred.bsts$mean]
+res[, bottom_interval := pmax(0, pred.bsts$interval[1,])]
+res[, top_interval := pred.bsts$interval[2,]]
+
+ggplot(res, aes(date)) +
+  geom_line(aes(y = value, colour = "real")) +
+  geom_line(aes(y = exp(pred_mean), colour = "pred_mean")) +
+  geom_line(aes(y = exp(bottom_interval), colour = "bottom_interval")) +
+  geom_line(aes(y = exp(top_interval), colour = "top_interval")) +
+  facet_wrap( ~ week.code, ncol = 1, scales = "free_x")
+ggsave("jueves_nov.png", height = 150, units = "cm", limitsize = FALSE)
+
+# comparaciones modelos
+# rangos incertidumbre
+# combinación?
+
