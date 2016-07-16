@@ -15,7 +15,7 @@ var.data <- load_contamination_variables()[]
 meteo.data <- load_meteo_data()
 traffic.data <- load_traffic_data()
 air.data <- merge(air.data, var.data, by.x = "variable", by.y = "var_id")
-air.data <- merge(air.data, meteo.data, by = "date")
+air.data <- merge(air.data, meteo.data, by = c("date", "hour"))
 air.data <- merge(air.data, traffic.data, by = "date")
 
 # Historic evolution
