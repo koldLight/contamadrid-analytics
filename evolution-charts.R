@@ -8,6 +8,8 @@ library(ggplot2)
 library(lubridate)
 
 source("R/air-data.R")
+source("R/meteo-data.R")
+source("R/traffic-data.R")
 
 # pza españa: 28079004
 air.data <- load_historical_air_data("28079004")
@@ -18,12 +20,16 @@ air.data <- merge(air.data, var.data, by.x = "variable", by.y = "var_id")
 air.data <- merge(air.data, meteo.data, by = c("date", "hour"))
 air.data <- merge(air.data, traffic.data, by = "date")
 
+air.data[, year := year(date)]
+air.data[, month := month(date)]
+air.data[, day := day(date)]
+
 # Historic evolution
 historic <- air.data[, .(mean = mean(value)),
                          #max  = max(value),
                          #min  = min(value)),
                      by = .(year, month, var_formula)]
-#historic[, date := as.Date(paste0(2000 + year, '-', month, '-01'), '%Y-%m-%d')]
+historic[, date := as.Date(paste0(year, '-', month, '-01'), '%Y-%m-%d')]
 historic[, year  := NULL]
 historic[, month := NULL]
 
@@ -51,12 +57,13 @@ ggplot(monthly, aes(date, value, colour = variable)) +
   geom_line() +
   facet_grid(var_formula ~ ., scales = "free_y")
 
+
 ggplot(air.data, aes(as.factor(month(date)), value)) +
   geom_boxplot()
 
 # Daily evolution (within a week)
 daily <- copy(air.data)
-#daily[, wday := wday(as.Date(paste0(2000 + year, '-', month, '-', day), '%Y-%m-%d'), label = TRUE)]
+daily[, wday := wday(date, label = TRUE)]
 daily <- daily[, .(mean = mean(value)),
                    #max  = max(value),
                    #min  = min(value)),
