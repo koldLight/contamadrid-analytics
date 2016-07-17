@@ -30,7 +30,7 @@ setkey(air.data, var_formula, station, date, hour)
 air.data[,                      temp_range := max_temp - min_temp]
 air.data[min_temp <= 5,         temp_range_inv := temp_range ]
 air.data[is.na(temp_range_inv), temp_range_inv := 0]
-air.data[,                      wday := wday(date)]
+air.data[,                      wday := as.factor(wday(date))]
 
 # Feature normalization
 air.data[, m30_density := m30_density / 1e6]
@@ -55,12 +55,11 @@ for (form_station in unique(prep.data$formula_station)) {
   # Train and test sets
   test.weeks <- c("2016-03-27", "2015-01-04", "2016-05-08", "2016-06-26", "2016-05-01", "2015-11-29",
                   "2015-12-20", "2015-12-13", "2015-11-01", "2016-06-12")
-  train <- data
 
   for (pred.week.c in test.weeks) {
-    pred.week <- as.Date(pred.week)
-    it.train <- train[week <  pred.week]
-    it.test  <- test [week == pred.week]
+    pred.week <- as.Date(pred.week.c)
+    it.train <- data[week <  pred.week]
+    it.test  <- data[week == pred.week]
     
     # Model train, including hourly seasonality
     ss <- AddSeasonal(list(), y = it.train$value_log, nseasons = 24)

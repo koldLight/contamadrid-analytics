@@ -62,12 +62,13 @@ daily.data <- daily.data[, c("date", "formula_station", "temp_range", "mean_temp
                              "prev_q_95"),
                          with = FALSE]
 
-probs <- data.frame(formula_station = character(0), prob = numeric(0),
-                    precision = numeric(0), recall = numeric(0))
-
 # Train a model for every station
 variables <- c(quote(prewarning), quote(warning)) 
 for (col in variables) {
+  
+  probs <- data.frame(formula_station = character(0), prob = numeric(0),
+                      precision = numeric(0), recall = numeric(0))
+  
   for (form_station in unique(daily.data[date > as.Date("2014-01-07")]$formula_station)) {
     print(paste0("Training ", as.character(col), " for ", form_station))
     data <- daily.data[formula_station == form_station ]
