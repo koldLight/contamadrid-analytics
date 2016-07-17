@@ -1,0 +1,334 @@
+---
+title: "Predicción de niveles de NO2 en Madrid"
+author: "Luz Frias"
+date: "July 17, 2016"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 4
+---
+
+# Introducción
+
+Durante el último año, el tema de la contaminación en Madrid ha adquirido gran protagonismo. En parte por la creciente preocupación por el medio ambiente y el efecto de la contaminación en la salud pública, y en parte por las recientes restricciones de circulación impuestas por el Ayuntamiento de Madrid para disminuir los niveles más altos.
+
+## Normativa
+
+### Zonas
+
+Se establecen 5 zonas en Madrid con estaciones de medición:
+
+\includegraphics[width=250px]{resources/normativa_zonas.png}
+
+### Niveles de actuación
+
+Se establecen tres niveles de actuación en función de las concentraciones de NO~2~ que se registren en las zonas que se han definido
+
+* Preaviso: cuando en dos estaciones cualesquiera de una misma zona se superan los 180 microgramos/m³ durante dos horas consecutivas.
+* Aviso: cuando en dos estaciones cualesquiera de una misma zona se superan los 200 microgramos/m³ durante dos horas consecutivas.
+* Alerta: cuando en tres estaciones cualesquiera de una misma zona (o dos si se trata de zona 4) se superan los 400 microgramos/m³ durante tres horas consecutivas
+
+### Medidas
+
+Se aplican las siguientes restricciones en cada uno de los escenarios definidos:
+
+* Escenario 1: 1 día con superación del nivel de preaviso
+
+    * Reducción de la velocidad a 70 km/h en la M-30 y accesos
+
+* Escenario 2: 2 días consecutivos con superación del nivel de preaviso ó 1 día con superación del nivel de aviso
+
+    * Reducción de la velocidad a 70 km/h en la M-30 y accesos
+    * Prohibición del estacionamiento de vehículos en las plazas y horario del Servicio de Estacionamiento Regulado (SER) en el interior de la M-30 
+
+* Escenario 3: 2 días consecutivos con superación del nivel de aviso
+
+    * Reducción de la velocidad a 70 km/h en la M-30 y accesos
+    * Prohibición del estacionamiento de vehículos en las plazas y horario del SER en el interior de la M-30 
+    * Restricción de la circulación en el interior de la almendra central (área interior de la M-30) del 50% de todos los vehículos
+
+* Escenario 4: 3 días consecutivos de nivel de aviso o 1 día de nivel de alerta 
+
+    * Reducción de la velocidad a 70 km/h en la M-30 y accesos
+    * Prohibición del estacionamiento de vehículos en las plazas y horario del SER en el interior de la M-30 
+    * Restricción de la circulación en el interior de la almendra central (área interior de la M-30) del 50% de todos los vehículos 
+    * Restricción de la circulación por la M-30 del 50% de todos los vehículos
+    * Restricción de la circulación de taxis libres, excepto Ecotaxis y Eurotaxis, en el interior de la almendra central (área interior de la M-30) 
+
+## Objetivo del proyecto
+
+Hasta ahora, estas restricciones se aplican de manera reactiva, es decir, tras haber alcanzado niveles altos de contaminación. Este proyecto está motivado por intentar abordar el problema de forma proactiva, prediciendo con al menos un día de antelación niveles de alerta de NO~2~.
+
+# Datos
+
+## Contaminación
+
+Los datos de contaminación los publica el ayuntamiento en su portal de [datos abiertos](http://datos.madrid.es/portal/site/egob). Los datos se pueden encontrar con dos periodicidades diferentes (horaria y diaria) y en formato histórico o tiempo real (datos del día actual, con actualización horaria y un retraso de aproximadamente una hora).
+
+En este proyecto me he centrado en el estudio de los datos a nivel horario. Algo curioso es que no hay problemas en encontrar el histórico desde 2001 hasta el mes previo al actual, ni los datos de hoy, pero no se publican en ningún lado los datos del mes actual hasta el día previo a la consulta.
+
+El parseo de los ficheros resulta un poco incómodo, ya que, aunque contienen la misma información el histórico y los datos en tiempo real, tienen formatos diferentes:
+
+* El histórico se guarda en un fichero de anchos fijos
+* El de datos en tiempo real, en un fichero separado por comas
+
+Además que en cada fila se representa un día, y los datos horarios están en formato ancho (un valor horario en cada columna). Por conveniencia para el entrenamiento, el proceso de limpieza lo pasa a formato largo (una fila por hora).
+
+### Mediciones históricas
+
+Se encuentran [aquí](http://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=f3c0f7d512273410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default) zipeados por año. Para facilitar reprocesos (durante el análisis detecté que faltaban algunos meses, y la mayoría de ellos han sido repuestos tras avisar al administrador del portal) y la inclusión de nuevos datos, los datos se recogen mediante un proceso que:
+
+* Descarga los zip
+* Los descomprime
+* Los lee y pasa los procesos de limpieza necesarios
+* Los guarda como un fichero por año
+
+### Mediciones en tiempo real
+
+Se encuentran [aquí](http://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=41e01e007c9db410VgnVCM2000000c205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default). Se ha desarrollado un proceso que:
+
+* Lo lee y pasa los procesos de limpieza necesarios
+* Lo guarda como un fichero por día
+
+### Información de estaciones
+
+Se encuentra [aquí](http://datos.madrid.es/portal/site/egob/menuitem.c05c1f754a33a9fbe4b2e4b284f1a5a0/?vgnextoid=9e42c176313eb410VgnVCM1000000b205a0aRCRD&vgnextchannel=374512b9ace9f310VgnVCM100000171f5a0aRCRD&vgnextfmt=default) en formato excel. Lo he transformado en un proceso semi-manual a texto plano, transformando las coordenadas de formato grados, minutos y segundos a formato decimal.
+
+## Variables predictoras
+
+### Introducción
+
+El primer paso fue estudiar cuáles son las variables que influyen en la varación de los niveles del NO~2~. Tras algo de documentación en páginas relacionadas y papers científicos, se determina que son:
+
+* Las fuentes principales son las emisiones de vehículos e industriales
+* La variación del nivel está relacionada con factores metereológicos, especialmente:
+
+    * Velocidad del viento
+    * Humedad relativa
+    * Temperatura
+    
+### Metereología
+
+Curiosamente, una de las cosas que más me ha costado encontrar. Agencias como la AEMET proveen datos históricos a pocos días atrás. Otras páginas te permiten consultar solo algunos datos históricos (temperatura, lluvia y poco más) a través de visualizaciones en su web.
+
+La falta de datos en este ámbito ha causado incluso a que algunos particulares vendan la información, como p.ej. [datosclima.es](http://datosclima.es/Aemet2013/Datosporestacion.html).
+
+Finalmente los datos utilizados para este proyecto se han escrapeado de [OGIMET](http://ogimet.com/), que proporciona registros diarios y horarios para un conjunto reducido de estaciones. He escogido la estación de Madrid - Barajas por ser la más cercana a la ciudad de entre las disponibles.
+
+En el scraping se extraen:
+
+* A nivel diario:
+
+    * Temperatura media, mínima y máxima
+    * Humedad relativa
+    * Velocidad del viento
+    * Nivel de precipitaciones
+
+* A nivel horario:
+
+    * Temperatura
+
+#### La inversión térmica
+
+Un descubrimiento importante durante la construcción de los modelos predictivos fue el efecto de la inversión térmica (que hasta ese momento no conocía).
+
+En el siguiente árbol se puede observar cómo, en días con temperaturas mínimas bajas y máximas altas, aumenta considerablemente la probabilidad de encontrar valores superiores a 180 microgramos / m³ de NO~2~
+
+\includegraphics{resources/inversion_termica.png}
+
+A partir de ese descubrimiento, incluí la diferencia entre la temperatura mínima y máxima entre las variables predictoras.
+
+Pero, ¿qué es la inversión térmica? En situaciones normales, el aire se mueve constantemente y las capas que lo forman suelen ordenarse por su temperatura, con las más frías circulando en la parte alta de la atmósfera y las más calientes, abajo.
+
+Cuando ese ciclo de movimiento se interrumpe, se forma una capa de aire frío que queda inmóvil sobre el suelo e impide la circulación atmosférica. Este fenómeno es la inversión térmica y se produce con más frecuencia en las noches despejadas de invierno, cuando el suelo ha perdido calor por radiación y las capas de aire cercanas a él se enfrían más rápido que las capas superiores.
+
+Cuando el aire se mueve con normalidad hace circular grandes cantidades de polvo, humo y partículas suspendidas, eliminando la contaminación y limpiando la atmósfera de manera natural. Por eso, cuando la inversión térmica inmoviliza las capas inferiores cercanas al suelo sobre una ciudad, quedan atrapados los contaminantes suspendidos y la población se expone a respirar un aire más contaminado de lo normal.
+
+\includegraphics{resources/inversion_termica_01.jpg}
+\includegraphics{resources/inversion_termica_02.jpg}
+
+En nuestros datos, si visualizamos los niveles de NO2 en base a la diferencia de temperaturas mínima y máxima, y la temperatura mínima, podemos observar como un porcentaje importante de los valores altos de NO~2~ pueden estar relacionados con bajas mínimas y una diferencia grande con la máxima.
+
+\includegraphics{resources/inversion_termica_28079054.png}
+
+### Niveles de tráfico
+
+[Aquí](http://www.mc30.es/images/xml/historicousuarios.xml) se puede encontrar un histórico de los niveles de tráfico en la M-30 desde 2013, que se actualiza diariamente.
+
+Vienen datos totales en formato xml con un nodo por día. 
+
+La inclusión de los datos de niveles de tráfico, supone en general una mejora de la predicción, pero "perdemos" el histórico de 2001 a 2013 que sí tenemos disponible en datos de contaminación y metereología.
+
+### Calendario laboral
+
+Con el objetivo de poner en producción el modelo, hay que predecir la intensidad de tráfico a futuro. Para ello, he incluido los datos de festivos en la ciudad de Madrid. Ha sido un proceso semi-manual y con algunos datos dudosos en los años más antiguos.
+
+# Análisis descriptivo
+
+### Distribución de los valores
+
+Los valores se concentran en niveles bajos, formando una distribución con sesgo positivo.
+
+\includegraphics{resources/no2_hist.png}
+
+___Los siguientes gráficos se han pintado en base a las mediciones de la estación de plaza de España, para observar la evolución y no ensuciar la visualización con estaciones que se han dado de alta y de baja en los diferentes años.___
+
+La evolución histórica ha sido de una ligera disminución de la media mensual de valores de NO~2~. Pero en los últimos años, los inviernos están registrando medias más altas con respecto al periodo 2010 a 2013.
+
+\includegraphics{resources/historic_evolution.png}
+
+Además se registran valores altos, a menudo superando el nivel considerado de alerta de 200 mg/m³.
+
+\includegraphics{resources/historic_evol_boxplot.png}
+
+Dentro de cada año, los meses fríos son los que registran las medias más altas.
+
+\includegraphics{resources/monthly_evolution.png}
+
+Aunque durante todo el año se registran valores altos de contaminación, son algo más frecuentes y elevados en invierno.
+
+\includegraphics{resources/monthly_evol_boxplot.png}
+
+Dentro de una semana, se observan valores más altos en los días laborales con respecto al fin de semana. Además, se observa un posible efecto acumulativo.
+
+\includegraphics{resources/weekly_evolution.png}
+
+Los valores más altos de contaminación se dan en cualquier día de la semana.
+
+\includegraphics{resources/weekly_evol_boxplot.png}
+
+# Predicción
+
+Debido a las características de cada punto de medición, en todos los casos se ha creado un modelo por cada estación. Un ejemplo es cómo influye el nivel de tráfico a estaciones cercanas a puntos de alta densidad de circulación con respecto a puntos situados en grandes zonas ajardinadas (p.ej. parque Rey Juan Carlos I).
+
+## Valores de NO2 con Gradient Boosting Trees
+
+Los modelos realizados tienen las siguientes características:
+
+* Paquete de R xgboost.
+* Entrenados mediante validación cruzada.
+* Los datos incluidos en cada iteración del entrenamiento durante la validación cruzada es un subconjunto pequeño de los datos (7.5%). Esto es para evitar overfitting, ya que los datos de un mismo día pero diferentes horas tienen muchos datos en común (intensidad tráfico, datos metereológicos a nivel diario, ...) y con árboles profundos tiende a memorizar los valores fijando los datos comunes.
+* Se sobrescribe la métrica de evaluación a minimizar (por defecto RMSE) por una customizada, que penaliza los errores en valores altos. Es decir, es peor equivocarse por 30 microgramos en un valor real de 180 que en uno de 20. Aunque haciendo la prueba de volver a entrenar optimizando el RMSE los resultados son prácticamente los mismos.
+* Tuning de parámetros mediante caret.
+* Separación de conjunto de entrenamiento y validación por fecha, intentando simular que predecimos valores futuros en base a observaciones pasadas.
+
+Los resultados son en general buenos para valores normales, pero se pierden a veces los picos. P.ej. esta es la comparación entre valores reales y predichos en la estación de C/Alcalá con C/O'Donell.
+
+\includegraphics{resources/xgb_weigthed_prediction_NO2_28079008.png}
+
+El rendimiento general sobre los datos de validación es:
+
+* MAE: entre 9 - 19
+* RMSE: entre 12 - 27
+
+Aquí se puede ver cómo los valores bajos y normales se predicen muy bien:
+
+\includegraphics{resources/xgb_weigthed_NO2_28079008_best.png}
+
+Y aquí otras no tan precisas:
+
+\includegraphics{resources/xgb_weigthed_NO2_28079008_worst.png}
+
+## Valores de NO2 con Elastic Net
+
+Para intentar mejorar la predicción en los picos, vamos a intentarlo cambiando de modelo a uno que, en lugar de utilizar internamente árboles, utilice elastic net (lasso + ridge)
+
+De forma similar al entrenamiento anterior, los modelos realizados tienen las siguientes características:
+
+* Paquete de R glmnet.
+* Entrenados mediante validación cruzada.
+* Tuning de parámetros mediante caret.
+* Separación de conjunto de entrenamiento y validación por fecha, intentando simular que predecimos valores futuros en base a observaciones pasadas.
+
+Desgraciadamente, los resultados son lo contrario de lo que esperábamos, capturando peor los picos. P.ej. esta es la comparación entre valores reales y predichos en la estación de C/Alcalá con C/O'Donell (misma validación que en el caso de xgboost).
+
+\includegraphics{resources/glmnet_prediction_NO2_28079008.png}
+
+El rendimiento general es algo peor que en el caso anterior.
+
+De forma equivalente, los valores bajos y normales se predicen bien:
+
+\includegraphics{resources/glmnet_NO2_28079004_best.png}
+
+Y los picos se pierden:
+
+\includegraphics{resources/glmnet_NO2_28079004_worst.png}
+
+## Valores de NO2 con series temporales bayesianas
+
+En base a los resultados anteriores, parece que no podemos predecir con exactitud cuándo se va a producir un pico. Pero podemos modificar el problema incluyendo intervalos de confianza, y alertar de aquellos que, con una probabilidad, superen ciertos niveles. Además, nuestros datos son una serie temporal, y hasta el momento no estamos explotando esa estructura interna durante el modelado.
+
+Por ello este entrenamiento lo realizamos utilizando series temporales bayesianas, concretamente el paquete de R bsts. Es lo que utiliza internamente el paquete de Google [CasualImpact](https://google.github.io/CausalImpact/CausalImpact.html).
+
+Este modelo proporciona en la predicción distintos valores relacionados con la distribución de la y: la media, mediana y los cuantiles solicitados.
+
+En el entrenamiento le hemos indicado que existe una estacionalidad diaria.
+
+La validación se ha realizado entrenando el algoritmo con datos hasta justo el instante anterior de la fecha que queremos predecir, y prediciendo la semana siguiente.
+
+La precisión del modelo, si comparamos la media de la predicción contra el valor real, es significativamente peor que en los dos casos anteriores. Pero ganamos la información de cómo se puede distribuir esa variable de salida.
+
+Algunos ejemplos de predicción, para la estación de C/Alcalá con C/O'Donell y extrayendo los cuantiles 0.05 y 0.95 son:
+
+\includegraphics{resources/bsts_NO2_28079008_2016-03-27.png}
+
+\includegraphics{resources/bsts_NO2_28079008_2015-12-13.png}
+
+\includegraphics{resources/bsts_NO2_28079008_2015-12-20.png}
+
+\includegraphics{resources/bsts_NO2_28079008_2016-05-01.png}
+
+\includegraphics{resources/bsts_NO2_28079008_2016-06-12.png}
+
+En general, los valores reales están por debajo del intervalo superior, y acompañan al valor real (reales más bajos tienen intervalos superiores también más bajos). Pero se observan casos extremos, como incrementos del intervalo superior con valores bajos del real, o el real superando el intervalo superior.
+
+## Clasificación de nivel de aviso con Random Forest
+
+Lo siguiente es una simplificación del problema. En lugar de intentar predecir el valor horario del NO~2~, transformamos la pregunta a si en un determinado día se va a superar o no el nivel de preaviso (180 microgramos/m³ durante 2 horas) y de aviso (200 microgramos/m³ durante 2 horas).
+
+Los modelos realizados tienen las siguientes características:
+
+* Paquete de R randomForest.
+* Separación de conjunto de entrenamiento y validación por fecha, intentando simular que predecimos valores futuros en base a observaciones pasadas.
+* Al contrario que en los modelos anteriores, no usamos el nivel de tráfico, y así podemos entrenar con todo el conjunto de datos.
+* Se agrupan los datos a nivel diario.
+* Se incluye como variable predictora el percentil 95 de los niveles del día anterior (para tener en cuenta el efecto acumulativo).
+* Como el modelo está muy desbalanceado (muchas observaciones negativas por cada una positiva), entrenamos 25 modelos, en el que cada uno incluya dos partes de observaciones negativas por cada una positiva, y se combinan. Se hace 2 - 1 en lugar de 1 - 1 porque se ha observado una mejora en los resultados de esta forma. Tiene sentido, que en caso de duda se "vote" al no.
+* Se ha determinado el punto de corte de la probabilidad a partir de la cual se considera el sí en la predicción de la siguiente forma:
+
+    * Se predice utilizando los valores del 0.50 al 0.95 con incrementos de 0.05
+    * Se calcula el coste del error, penalizando el falso negativo 4 veces más que el falso positivo.
+    * Se escoge la probabilidad con menor coste
+
+Los resultados son los siguientes:
+
+Prediccion del nivel de preaviso:
+
+```{r, echo = FALSE}
+read.csv("../res/high_prob_prewarning_probs.tsv", sep = "\t")
+```
+
+Predicción del nivel de aviso:
+
+```{r, echo = FALSE}
+read.csv("../res/high_prob_warning_probs.tsv", sep = "\t")
+```
+
+Los valores NA son aquellos en los que el denominador es 0 (true positive + false positive en el caso de la precisión, y true positive + false negative en el recall). Las estaciones que no se listan son aquellas que no tenían ningún caso de preaviso / aviso en el conjunto de validación.
+
+# Próximos pasos
+
+El proyecto no termina aquí, los próximos pasos a acometer son:
+
+* Combinación de modelos para mejorar la predicción
+* Puesta en producción:
+
+    * Predicción de la intensidad de tráfico a 1 o 2 días
+    * Subida del código a un EC2 de Amazon Web Services o similar
+    * Lectura del fichero de datos de contaminación en tiempo real cada 30 minutos (cron)
+    * Automatización de la predicción y volcado a base de datos
+    * Publicación de resultados en un portal: http://www.contamadrid.es
+
+* Publicación de resultados en un portal: http://www.contamadrid.es
+* Extender el análisis a otros contaminantes como el O~3~, CO y las PM.
+* Pasar el proyecto a un repositorio público (GitHub) por si quieren colaborar terceros

@@ -19,10 +19,12 @@ traffic.data <- load_traffic_data()
 air.data <- merge(air.data, var.data, by.x = "variable", by.y = "var_id")
 air.data <- merge(air.data, meteo.data, by = c("date", "hour"))
 air.data <- merge(air.data, traffic.data, by = "date")
+air.data <- air.data[var_formula == "NO2" & valid == TRUE]
 
 air.data[, year := year(date)]
 air.data[, month := month(date)]
 air.data[, day := day(date)]
+air.data[, temp_range := max_temp - min_temp ]
 
 # Historic evolution
 historic <- air.data[, .(mean = mean(value)),
@@ -37,6 +39,7 @@ historic <- melt(historic, id.vars = c("date", "var_formula"))
 
 ggplot(historic, aes(date, value, colour = variable)) +
   geom_line() +
+  scale_x_date(date_breaks = "1 year") + 
   facet_grid(var_formula ~ ., scales = "free_y")
 
 ggplot(air.data, aes(as.factor(year), value)) +
@@ -55,6 +58,7 @@ monthly <- melt(monthly, id.vars = c("date", "var_formula"))
 
 ggplot(monthly, aes(date, value, colour = variable)) +
   geom_line() +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") + 
   facet_grid(var_formula ~ ., scales = "free_y")
 
 
@@ -93,3 +97,7 @@ ggplot(air.data, aes(rel_humidity_pct, value)) +
 
 ggplot(air.data, aes(rain, value)) +
   geom_point(size = .1)
+
+ggplot(air.data, aes(temp_range, value)) +
+  geom_point(aes(colour = min_temp)) +
+  scale_color_gradient("Min temp", low = "blue", high = "yellow")
