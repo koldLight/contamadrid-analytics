@@ -75,6 +75,19 @@ load_historical_air_data_into_db <- function() {
   lapply(files, load.year)
 }
 
+load_current_air_data_into_db <- function() {
+  files <- list.files(CURRENT_AIR_DATA_DIR)
+  current.file <- max(files)
+  
+  f <- fread(paste0(CURRENT_AIR_DATA_DIR, current.file))
+  f[, valid := as.numeric(valid)]
+  f[is.na(value), value := 0]
+  
+  write.table(f, "/tmp/measure_tmp.tsv", sep = "\t", row.names = FALSE)
+  system(paste0("PGPASSWORD=", G.DB.PASS, " psql -h ", G.DB.HOST," -U ", G.DB.USER,
+                " -d ", G.DB.DATABASE, ' -f "resources/historical-air-data.sql"'))
+}
+
 load_contamination_variables <- function() {
   fread("dat/contamination_variables.tsv")
 }
