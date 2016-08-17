@@ -23,3 +23,7 @@ dat/air_hist/
 
 # Results
 res/
+
+# Secrets
+conf/conf.R
+

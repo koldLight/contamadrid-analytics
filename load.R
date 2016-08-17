@@ -3,8 +3,6 @@
 # Gets contamination data
 ##########################################################################
 
-library(data.table)
-
 source("R/air-data.R")
 source("R/meteo-data.R")
 source("R/traffic-data.R")
@@ -15,6 +13,9 @@ download_historical_air_data()
 download_meteo_data()
 download_traffic_data()
 build_calendar_data()
+
+# Load into DB
+load_historical_air_data_into_db()
 
 # Incremental data
 download_current_day_air_data()

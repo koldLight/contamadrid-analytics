@@ -13,6 +13,8 @@
 library(reshape2)
 library(data.table)
 
+source("R/db.R")
+
 ##########################################################################
 # Constants
 ##########################################################################
@@ -54,6 +56,23 @@ load_historical_air_data <- function(station.ids = NA) {
   }
   
   data <- rbindlist(lapply(files, read.year))
+}
+
+load_historical_air_data_into_db <- function() {
+  files <- list.files(HISTORICAL_AIR_DATA_RES_DIR)
+  
+  load.year <- function(file) {
+    print(paste("Loading file", file, "into DB"))
+    f <- fread(paste0(HISTORICAL_AIR_DATA_RES_DIR, file))
+    f[, valid := as.numeric(valid)]
+    f[is.na(value), value := 0]
+    
+    write.table(f, "/tmp/measure_tmp.tsv", sep = "\t", row.names = FALSE)
+    system(paste0("PGPASSWORD=", G.DB.PASS, " psql -h ", G.DB.HOST," -U ", G.DB.USER,
+                  " -d ", G.DB.DATABASE, ' -f "resources/historical-air-data.sql"'))
+  }
+  
+  lapply(files, load.year)
 }
 
 load_contamination_variables <- function() {
