@@ -23,7 +23,11 @@ Y de forma opcional, o que estará más o menos desarrollada:
 
 * Presentación de los datos en un portal web
 
-## Tutor
+## Licencia
 
-Carlos J. Gil Bellosta
+Este proyecto se distribuye bajo la licence AGPLv3. Para más información, consultar el archivo LICENSE.
+
+## Agradecimientos
+
+Al tutor de este proyecto, sin el cual no sería posible: [Carlos J. Gil Bellosta](https://www.datanalytics.com/)
 
