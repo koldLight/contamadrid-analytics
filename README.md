@@ -12,16 +12,12 @@ Los datos están disponibles en el portal de datos abiertos del ayuntamiento de 
 
 ## Alcance
 
-Se propone abordar los siguientes puntos:
+Se abordan los siguientes puntos:
 
 * Tratamiento de los datos de entrada
 * Incorporación de otras fuentes de datos, por ejemplo meteorológicas, tráfico, ...
 * Análisis exploratorio de los datos, con el objetivo de determinar cuáles son los factores que más se relacionan con los niveles altos de contaminación del aire
 * Creación de modelos predictivos
-
-Y de forma opcional, o que estará más o menos desarrollada:
-
-* Presentación de los datos en un portal web
 
 ## Licencia
 
